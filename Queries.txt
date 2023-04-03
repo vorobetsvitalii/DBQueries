@@ -1,0 +1,293 @@
+Lab1
+-- Створення таблиці "Конференції"
+CREATE TABLE conferences (
+id INT PRIMARY KEY IDENTITY(1,1),
+name VARCHAR(255) NOT NULL,
+start_date DATE NOT NULL,
+end_date DATE NOT NULL,
+building_id INT NOT NULL REFERENCES buildings(id)
+);
+
+-- Створення таблиці "Секції"
+CREATE TABLE sections (
+id INT PRIMARY KEY IDENTITY(1,1),
+name VARCHAR(255) NOT NULL,
+order_number INT NOT NULL,
+chairperson VARCHAR(255) NOT NULL,
+room_id INT NOT NULL REFERENCES rooms(id),
+conference_id INT NOT NULL REFERENCES conferences(id),
+CONSTRAINT unique_order_number_conference_id UNIQUE (order_number, conference_id)
+);
+
+-- Створення таблиці "Виступи"
+CREATE TABLE presentations (
+id INT PRIMARY KEY IDENTITY(1,1),
+topic VARCHAR(255) NOT NULL,
+speaker_id INT NOT NULL REFERENCES speakers(id),
+start_time DATETIME2 NOT NULL,
+duration TIME(0) NOT NULL,
+section_id INT NOT NULL REFERENCES sections(id),
+CONSTRAINT unique_start_time_section_id UNIQUE (start_time, section_id)
+);
+
+-- Створення таблиці "Обладнання"
+CREATE TABLE equipment (
+id INT PRIMARY KEY IDENTITY(1,1),
+name VARCHAR(255) NOT NULL,
+description TEXT,
+presentation_id INT NOT NULL REFERENCES presentations(id)
+);
+
+-- Створення таблиці "Виступаючі"
+CREATE TABLE speakers (
+id INT PRIMARY KEY IDENTITY(1,1),
+name VARCHAR(255) NOT NULL,
+degree VARCHAR(255) NOT NULL,
+affiliation VARCHAR(255) NOT NULL,
+position VARCHAR(255) NOT NULL,
+bio TEXT
+);
+
+-- Створення таблиці "Приміщення"
+CREATE TABLE rooms (
+id INT PRIMARY KEY IDENTITY(1,1),
+name VARCHAR(255) NOT NULL,
+building_id INT NOT NULL REFERENCES buildings(id),
+CONSTRAINT unique_name_building_id UNIQUE (name, building_id)
+);
+
+-- Створення таблиці "Будівлі"
+CREATE TABLE buildings (
+id INT PRIMARY KEY IDENTITY(1,1),
+name VARCHAR(255) NOT NULL,
+address VARCHAR(255) NOT NULL,
+CONSTRAINT unique_name_address UNIQUE (name, address)
+);
+SQL-запити для наповнення таблиць:
+-- Додавання записів до таблиці "Будівлі"
+INSERT INTO buildings (name, address) VALUES
+('Conference Center', '123 Main St'),
+('Tech Campus', '456 Technology Blvd'),
+('City Hall', '789 Civic Plaza');
+
+-- Додавання записів до таблиці "Приміщення"
+INSERT INTO rooms (name, building_id) VALUES
+('Room A', 1),
+('Room B', 1),
+('Room C', 2),
+('Room D', 2),
+('Room E', 3);
+
+-- Додавання записів до таблиці "Виступаючі"
+INSERT INTO speakers (name, degree, affiliation, position, bio) VALUES
+('John Smith', 'PhD', 'University of Science', 'Professor', 'John Smith is a professor of Computer Science at the University of Science.'),
+('Jane Doe', 'PhD', 'Tech University', 'Associate Professor', 'Jane Doe is an associate professor of Electrical Engineering at Tech University.'),
+('Bob Johnson', 'MSc', 'XYZ Corporation', 'Research Engineer', 'Bob Johnson is a research engineer at XYZ Corporation.');
+
+-- Додавання записів до таблиці "Конференції"
+INSERT INTO conferences (name, start_date, end_date, building_id) VALUES
+('Tech Conference', '2023-07-10', '2023-07-12', 2),
+('Science Conference', '2023-08-15', '2023-08-17', 1);
+
+-- Додавання записів до таблиці "Секції"
+INSERT INTO sections (name, order_number, chairperson, room_id, conference_id) VALUES
+('Artificial Intelligence', 1, 'John Smith', 1, 1),
+('Internet of Things', 2, 'Jane Doe', 2, 1),
+('Robotics', 1, 'Bob Johnson', 3, 2),
+('Nanotechnology', 2, 'John Smith', 4, 2);
+
+-- Додавання записів до таблиці "Виступи"
+INSERT INTO presentations (topic, speaker_id, start_time, duration, section_id) VALUES
+('Deep Learning', 1, '2023-07-10 10:00:00', '01:00:00', 1),
+('Edge Computing', 2, '2023-07-10 11:00:00', '01:00:00', 2),
+('Robotics for Manufacturing', 3, '2023-07-12 13:00:00', '00:45:00', 3),
+('Nanoparticle Synthesis', 1, '2023-08-15 09:00:00', '01:15:00', 4),
+('Quantum Computing', 2, '2023-08-16 10:30:00', '01:30:00', 4);
+
+-- Додавання записів до таблиці "Обладнання"
+INSERT INTO equipment (name, description, presentation_id) VALUES
+('Laptop', 'MacBook Pro', 1),
+('Projector', '1080p HD', 2),
+('Robot Arm', '6-DOF', 3),
+('Electron Microscope', 'Resolution 0.2 nm', 4),
+('Quantum Processor', '10 qubits', 5);
+
+
+Lab2
+•	SELECT на базі однієї таблиці з використанням сортування, накладенням умов зі зв’язками OR та AND.
+SELECT *
+FROM presentations
+SELECT *
+FROM presentations
+WHERE (topic LIKE '%Deep Learning%' OR topic LIKE '%Quantum Computing%')
+AND duration >= '01:00:00'
+ORDER BY start_time;
+ 
+•	SELECT з виводом обчислюваних полів (виразів) в колонках результату.
+SELECT s.name AS section_name , CONVERT(varchar(8), DATEADD(second, SUM(DATEDIFF(second, '00:00:00', p.duration)), '00:00:00'), 108) AS total_duration
+FROM presentations p
+INNER JOIN sections s ON p.section_id = s.id
+GROUP BY s.name;
+ 
+•	SELECT на базі кількох таблиць з використанням сортування, накладенням умов зі зв’язками OR та AND.
+SELECT *
+FROM presentations
+INNER JOIN sections ON presentations.section_id = sections.id
+INNER JOIN rooms ON sections.room_id = rooms.id
+INNER JOIN buildings ON rooms.building_id = buildings.id
+WHERE (buildings.address = '123 Main St' OR rooms.name = 'Room D')
+AND duration < '01:20:00'
+ORDER BY start_time;
+ 
+•	SELECT на базі кількох таблиць з типом поєднання Outer Join.
+SELECT rooms.name, presentations.topic AS presentations_topic, sections.name AS sections_name, conferences.name AS conferences_name, presentations.start_time
+FROM rooms
+LEFT OUTER JOIN sections ON rooms.id = sections.room_id
+LEFT OUTER JOIN presentations ON sections.id = presentations.section_id
+LEFT OUTER JOIN conferences ON sections.conference_id = conferences.id
+ORDER BY rooms.name;
+ 
+•	SELECT з використанням операторів Like, Between, In, Exists, All, Any.
+1) SELECT *
+FROM speakers
+WHERE name LIKE 'John%';
+ 
+2) SELECT *
+FROM presentations
+WHERE start_time BETWEEN '2023-07-11' AND '2023-12-31';
+ 
+
+3) SELECT *
+FROM sections
+WHERE room_id IN (1, 2);
+ 
+4) SELECT *
+FROM presentations p
+WHERE EXISTS (
+  		SELECT 1
+  		FROM presentations
+  		WHERE start_time > '2023-08-01' AND id = p.id
+        	);
+   
+5) SELECT *
+FROM conferences
+WHERE building_id = ALL (SELECT id FROM buildings WHERE address LIKE '123%');
+ 
+6) SELECT *
+FROM conferences
+WHERE id = ANY (SELECT conference_id FROM sections WHERE name = 'Robotics');
+ 
+•	SELECT з використанням підсумовування та групування.
+SELECT sections.name, CONVERT(TIME(0), DATEADD(SECOND, SUM(DATEDIFF(SECOND, '00:00:00', presentations.duration)), '00:00:00')) as total_duration
+FROM sections
+JOIN presentations ON sections.id = presentations.section_id
+GROUP BY sections.name
+ 
+•	SELECT з використанням під-запитів в частині Where.
+SELECT s.name AS section_name
+FROM sections s
+WHERE s.id IN (
+  SELECT p.section_id
+  FROM presentations p
+  JOIN equipment e ON p.id = e.presentation_id
+  WHERE e.name = 'Laptop'
+)
+ 
+•	SELECT з використанням під-запитів в частині From.
+SELECT subquery.total, buildings.name
+FROM (
+    SELECT COUNT(*) as total, building_id
+    FROM rooms
+    GROUP BY building_id
+) subquery
+JOIN buildings ON subquery.building_id = buildings.id;
+ 
+
+•	ієрархічний SELECT запит.
+WITH building_room_hierarchy AS (
+  SELECT 
+    buildings.id AS building_id,
+    buildings.name AS building_name,
+    rooms.id AS room_id,
+    rooms.name AS room_name
+  FROM buildings
+  INNER JOIN rooms ON buildings.id = rooms.building_id
+), 
+room_section_hierarchy AS (
+  SELECT 
+    building_room_hierarchy.building_id,
+    building_room_hierarchy.building_name,
+    building_room_hierarchy.room_id,
+    building_room_hierarchy.room_name,
+    sections.id AS section_id,
+    sections.name AS section_name
+  FROM building_room_hierarchy
+  INNER JOIN sections ON building_room_hierarchy.room_id = sections.room_id
+),
+section_presentation_hierarchy AS (
+  SELECT 
+    room_section_hierarchy.building_id,
+    room_section_hierarchy.building_name,
+    room_section_hierarchy.room_id,
+    room_section_hierarchy.room_name,
+    room_section_hierarchy.section_id,
+    room_section_hierarchy.section_name,
+    presentations.id AS presentation_id,
+    presentations.topic AS presentation_topic
+  FROM room_section_hierarchy
+  INNER JOIN presentations ON room_section_hierarchy.section_id = presentations.section_id
+)
+SELECT 
+  building_id,
+  building_name,
+  room_id,
+  room_name,
+  section_id,
+  section_name,
+  presentation_id,
+  presentation_topic
+FROM section_presentation_hierarchy;
+ 
+•	SELECT запит типу CrossTab.
+SELECT MONTH(start_time) AS Presentations_Month,
+       COUNT(*) AS Presentations_Count
+FROM presentations
+GROUP BY MONTH(start_time)
+ORDER BY MONTH(start_time) ASC;
+ 
+•	UPDATE на базі однієї таблиці.
+UPDATE conferences
+SET name = 'New Science Conference'
+WHERE id = 2;
+ 
+•	UPDATE на базі кількох таблиць.
+UPDATE conferences
+SET building_id = (SELECT id FROM buildings WHERE name = 'Building 2' AND address = '456 Technology Blvd')
+WHERE building_id = (SELECT id FROM buildings WHERE name = 'Building 1' AND address = '123 Main St')
+
+UPDATE buildings
+SET name = 'Нова назва будівлі',
+    address = 'Нова адреса будівлі'
+WHERE name = 'Building 1' AND address = '123 Main St'
+
+ 
+•	Append (INSERT) для додавання записів з явно вказаними значеннями.
+INSERT INTO buildings (name, address)
+VALUES ('Нова будівля', 'вул. Нова, 123');
+ 
+•	Append (INSERT) для додавання записів з інших таблиць.
+INSERT INTO presentations (topic, speaker_id, start_time, duration, section_id)
+SELECT p.topic, p.speaker_id, '2023-07-11 10:00:00.0000000', p.duration, p.section_id
+FROM sections s
+JOIN conferences c ON s.conference_id = c.id
+JOIN presentations p ON s.id = p.section_id
+JOIN speakers sp ON p.speaker_id = sp.id
+WHERE c.name = 'Tech Conference'
+AND sp.name = 'John Smith'
+ 
+•	DELETE для видалення всіх даних з таблиці.
+DELETE FROM equipment
+ 
+•	DELETE для видалення вибраних записів таблиці.
+DELETE FROM equipment
+WHERE id = 8;
