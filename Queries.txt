@@ -291,3 +291,37 @@ DELETE FROM equipment
 •	DELETE для видалення вибраних записів таблиці.
 DELETE FROM equipment
 WHERE id = 8;
+
+Lab 3
+
+CREATE PROCEDURE calculate_conference_rating
+    @start_date DATE,
+    @end_date DATE
+AS
+BEGIN
+    SELECT c.id, c.name, 
+        COUNT(DISTINCT s.id) AS section_count, 
+        COUNT(DISTINCT sp.id) AS speaker_count, 
+        COUNT(DISTINCT e.id) AS equipment_count,
+        AVG(DATEDIFF(MINUTE, '00:00:00', p.duration)) AS average_duration,
+        MAX(CASE WHEN sp.degree = 'PhD' THEN 1 ELSE 0 END) AS has_phd
+    INTO #temp_ratings
+    FROM conferences c
+    JOIN sections s ON c.id = s.conference_id
+    JOIN presentations p ON s.id = p.section_id
+    JOIN speakers sp ON p.speaker_id = sp.id
+    LEFT JOIN equipment e ON p.id = e.presentation_id
+    WHERE c.start_date >= @start_date AND c.end_date <= @end_date
+    GROUP BY c.id, c.name;
+
+    SELECT tr.*, 
+        CAST(((tr.speaker_count * tr.section_count) + (tr.equipment_count * 10) + (tr.has_phd * 100)) / (tr.average_duration / 60.0) AS DECIMAL(10,2)) AS rating
+    FROM #temp_ratings tr
+    ORDER BY rating DESC;
+
+    DROP TABLE #temp_ratings;
+END
+
+Запит для виклику цієї процедури:
+EXEC calculate_conference_rating '2021-11-11', '2023-11-11';
+
