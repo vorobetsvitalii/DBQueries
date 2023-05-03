@@ -325,3 +325,230 @@ END
 Запит для виклику цієї процедури:
 EXEC calculate_conference_rating '2021-11-11', '2023-11-11';
 
+
+--Lab4
+
+ALTER TABLE conferences
+ADD UCR VARCHAR(255),
+    DCR DATETIME2,
+    ULC VARCHAR(255),
+    DLC DATETIME2;
+Тригер для заповнення цих полів: 
+CREATE TRIGGER conferences_trigger
+ON conferences
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    DECLARE @ucr VARCHAR(255);
+    DECLARE @ulc VARCHAR(255);
+    DECLARE @now DATETIME2;
+
+    -- Заповнення полів UCR, DCR
+    SELECT @ucr = SYSTEM_USER;
+    SELECT @now = GETUTCDATE();
+
+    UPDATE conferences
+    SET UCR = @ucr,
+        DCR = @now
+    WHERE id IN (SELECT id FROM inserted);
+
+    -- Заповнення полів ULC, DLC
+    SELECT @ulc = SYSTEM_USER;
+    SELECT @now = GETUTCDATE();
+
+    UPDATE conferences
+    SET ULC = @ulc,
+        DLC = @now
+    WHERE id IN (SELECT id FROM inserted);
+END;
+
+
+CREATE TRIGGER trg_presentations_id
+ON presentations
+INSTEAD OF INSERT
+AS
+BEGIN
+    DECLARE @max_id INT
+    SET @max_id = (SELECT MAX(id) FROM presentations)
+
+    IF @max_id IS NULL
+        SET @max_id = 0
+
+    SET IDENTITY_INSERT presentations ON
+
+    INSERT INTO presentations (id, topic, speaker_id, start_time, duration, section_id)
+    SELECT ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) + @max_id, topic, speaker_id, start_time, duration, section_id
+    FROM inserted
+
+    SET IDENTITY_INSERT presentations OFF
+END;
+
+
+Перший тригер: 
+CREATE TRIGGER check_speaker_sections
+ON presentations
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    DECLARE @speaker_id INT, @start_time DATE, @section_id INT;
+
+    SELECT @speaker_id = speaker_id, @start_time = CONVERT(DATE, start_time), @section_id = section_id
+    FROM inserted;
+
+    IF EXISTS (
+        SELECT 1
+        FROM presentations
+        WHERE speaker_id = @speaker_id
+            AND CONVERT(DATE, start_time) = @start_time
+            AND section_id <> @section_id
+    )
+    BEGIN
+        RAISERROR('Speaker cannot participate in multiple sections on the same day.', 16, 1);
+        ROLLBACK TRANSACTION;
+    END
+END;
+
+
+
+Другий тригер: 
+CREATE TRIGGER сheck_presentation_room
+ON presentations
+AFTER INSERT, UPDATE
+AS
+BEGIN
+  IF EXISTS (
+    SELECT p1.id, p1.start_time, p1.duration, p1.section_id, r.building_id
+    FROM presentations p1
+    JOIN sections s1 ON p1.section_id = s1.id
+    JOIN rooms r ON s1.room_id = r.id
+    JOIN inserted i ON p1.id <> i.id AND p1.section_id <> i.section_id
+      AND r.building_id = (SELECT r2.building_id FROM rooms r2 JOIN sections s2 ON r2.id = s2.room_id WHERE s2.id = i.section_id)
+    WHERE (
+      (p1.start_time <= DATEADD(MINUTE, DATEDIFF(MINUTE, 0, i.start_time), CAST(i.duration AS DATETIME2(0))))
+      AND (DATEADD(MINUTE, DATEDIFF(MINUTE, 0, p1.start_time), CAST(p1.duration AS DATETIME2(0))) >= i.start_time)
+    )
+  )
+  BEGIN
+    RAISERROR('Two or more presentations are scheduled at the same time in the same building. Please choose a different time or room.', 16, 1)
+    ROLLBACK TRANSACTION
+    RETURN
+  END
+END
+
+
+--Lab5
+
+
+CREATE LOGIN [адміністратор] WITH PASSWORD = 'password';
+GO
+USE conference ;
+GO
+CREATE USER [адміністратор] FOR LOGIN [адміністратор];
+
+USE conference;
+GRANT CREATE PROCEDURE TO [адміністратор];
+GRANT CREATE TABLE TO [адміністратор];
+GRANT CREATE VIEW TO [адміністратор];
+GRANT CREATE FUNCTION TO [адміністратор];
+GRANT EXECUTE TO [адміністратор];
+GRANT ALTER TO [адміністратор];
+GRANT SELECT TO [адміністратор];
+GRANT INSERT TO [адміністратор];
+GRANT UPDATE TO [адміністратор];
+GRANT DELETE TO [адміністратор];
+GRANT REFERENCES TO [адміністратор];
+
+
+CREATE LOGIN [учасник] WITH PASSWORD = 'password';
+GO
+USE conference ;
+GO
+CREATE USER [учасник] FOR LOGIN [учасник];
+GO
+GRANT SELECT ON conferences TO [учасник];
+GRANT SELECT ON sections TO [учасник];
+GRANT SELECT ON presentations TO [учасник];
+GRANT SELECT ON equipment TO [учасник];
+GRANT SELECT ON speakers TO [учасник];
+GRANT SELECT ON rooms TO [учасник];
+GRANT SELECT ON buildings TO [учасник];
+GO
+
+CREATE LOGIN [організатор] WITH PASSWORD = 'password';
+GO
+USE conference;
+GO
+CREATE USER [організатор] FOR LOGIN [організатор];
+GO
+GRANT SELECT, INSERT, UPDATE, DELETE ON conferences TO [організатор];
+GRANT SELECT, INSERT, UPDATE, DELETE ON sections TO [організатор];
+GRANT SELECT, INSERT, UPDATE, DELETE ON presentations TO [організатор];
+GRANT SELECT, INSERT, UPDATE, DELETE ON equipment TO [організатор];
+GRANT SELECT, INSERT, UPDATE, DELETE ON speakers TO [організатор];
+GRANT SELECT, INSERT, UPDATE, DELETE ON rooms TO [організатор];
+GRANT SELECT, INSERT, UPDATE, DELETE ON buildings TO [організатор];
+
+
+
+CREATE ROLE organizer;
+CREATE ROLE listener;
+
+GRANT SELECT ON conferences TO listener;
+GRANT SELECT ON buildings TO listener;
+GRANT SELECT ON presentations TO listener;
+GRANT SELECT ON rooms TO listener;
+GRANT SELECT ON sections TO listener;
+GRANT SELECT ON speakers TO listener;
+
+GRANT SELECT, INSERT, DELETE, UPDATE ON conferences TO organizer;
+GRANT SELECT, INSERT, DELETE, UPDATE ON buildings TO organizer;
+GRANT SELECT, INSERT, DELETE, UPDATE ON presentations TO organizer;
+GRANT SELECT, INSERT, DELETE, UPDATE ON rooms TO organizer;
+GRANT SELECT, INSERT, DELETE, UPDATE ON sections TO organizer;
+GRANT SELECT, INSERT, DELETE, UPDATE ON speakers TO organizer;
+GRANT SELECT, INSERT, DELETE, UPDATE ON equipment TO organizer;
+
+
+
+EXEC sp_addrolemember 'organizer', 'організатор';
+EXEC sp_addrolemember 'db_owner', 'адміністратор';
+EXEC sp_addrolemember 'listener', 'учасник';
+
+
+
+REVOKE SELECT ON conferences TO [учасник];
+REVOKE SELECT ON sections TO [учасник];
+REVOKE SELECT ON presentations TO [учасник];
+REVOKE SELECT ON equipment TO [учасник];
+REVOKE SELECT ON speakers TO [учасник];
+REVOKE SELECT ON rooms TO [учасник];
+REVOKE SELECT ON buildings TO [учасник];
+
+
+
+EXEC sp_droprolemember 'listener', 'учасник';
+
+
+DROP ROLE test
+DROP USER слухач
+
+
+Тестові запити:
+EXECUTE AS USER = 'адміністратор'
+CREATE TABLE new_table (
+    id INT PRIMARY KEY,
+    name VARCHAR(50) NOT NULL,
+    description TEXT
+)
+REVERT
+
+EXECUTE AS USER = 'організатор'
+INSERT INTO equipment (name, description, presentation_id) VALUES
+('Laptop', 'MacBook Pro', 1)
+REVERT
+
+EXECUTE AS USER = 'учасник'
+SELECT * FROM sections
+REVERT
+
+
